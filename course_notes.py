@@ -28,6 +28,8 @@ STATUS_RUNNING = 'RUNNING'
 STATUS_FINISHED = 'FINISHED'
 STATUS_ERROR = 'ERROR'
 
+STATUS_CANCELLED = 'CANCELLED' # for later
+
 class Task:
   def __init__(self, coro):
     self.coro = coro  # Coroutine à exécuter
@@ -65,6 +67,16 @@ class Task:
 
     return "<Task '{}' [{}]{}>".format(self.name, self.status, result)
   
+  # For later ...
+  def cancel(self):
+    if self.is_done():
+      # Inutile d'annuler une tâche déjà terminée
+      return
+    self.status = STATUS_CANCELLED
+
+  def is_cancelled(self):
+    return self.status == STATUS_CANCELLED
+  
 task = Task(tic_tac())
 while not task.is_done():
   task.run()
@@ -97,6 +109,12 @@ class Loop:
 
   def _loop(self):
     task = self._running.popleft()
+
+    if task.is_cancelled():
+      # Forget cancelled tasks
+      print(task)
+      return
+    
     task.run()
     if task.is_done():
       print(task)
@@ -161,7 +179,31 @@ event_loop.run_until_complete(example())
 # Use asyncio ensure_future(subtask())
 # In our primitive model it is equivalent to doing loop.schedule(coro)
 # NB: We have no control over the life of the subtask, it can end long after our calling task.
-# So if we do run_until_complete of the main task, subtask may not have finished at the end. 
-# We'll have to call run_until_empty to clean up.
+# So with run_until_complete on the main task, subtask may not have finished at the end. 
+# We may want to call run_until_empty to clean up.
 
 ## V - Cancel a task
+
+# To cope with the problem we just saw of having a coroutine outlived by a task, we can 
+# try to cancel a subtask : cf changes to Task and Loop above. The other way is asyncio.wait() if 
+# we want to wait for a subtask to be finished.
+
+# def cancel(task):
+#   task.cancel()
+#   # Let the event loop take the cancellation into account : 
+#   yield
+
+# def example():
+#     print("Tâche 'example'")
+#     print("Lancement de la tâche 'subtask'")
+#     sub = ensure_future(subtask())
+#     print("Retour dans 'example'")
+#     for _ in range(3):
+#         print("(example)")
+#         yield
+#     yield from cancel(sub) # so that subtask is never called again ...
+
+## VI - In Python >= 3.5 : 
+
+# coroutines are defined with "async def"
+# The await keyword is used to call another coroutine sequentially.
